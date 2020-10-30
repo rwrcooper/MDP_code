@@ -6,7 +6,7 @@ Description:
     Script to execute testing on the MDP_algorithm.
 
 Usage:
-    multi_model_slope_analysis.py
+    MDP_algorithm.py
 
 Options:
     -h, --help          Show this screen and exit.

@@ -1,123 +1,154 @@
 """
-File: MDP_algorithm.py
+File: algorithm_dev.py
 Author: riley cooper
 Email: rwr.cooper@gmail.com
 Description:
-    Script to execute testing on the MDP_algorithm.
+    Script to develop MDP algorithms.
 
 Usage:
-    MDP_algorithm.py
+    algorithm_dev.py
 
 Options:
     -h, --help          Show this screen and exit.
 """
 
+
 from docopt import docopt
-from functions import *
-
-# TODO: make whole procedure into function and get docopts working
-# TODO: make script faster, more readible, remove need for gurobi
-
-# ##----------------DATA
-# n = 1000
+import xarray as xr
+import numpy as np
+import random as rnd
+import scipy.optimize
+import scipy.sparse as sp
 
 
-# nlist = [100,200,300,400,500,600,700,800,900,1000,1200,1400,1600,1800,2000,
-#     2200,2400,2600,2800,3000,3500,4000,4500,5000,6000,7000,8000,9000,10000]
+def make_pos(n, k, r):
+    pos = np.zeros((n*k, r))
+    # select random positions and update pos matrix
+    for row in range(n*k):
+        for col in range(r):
+            pos[row][col] = rnd.randint(1, n-1)
+    return(pos)
 
 
-n = 1000
+def make_tpm(n, k, r, pos):
+    tpm = np.zeros((n*k, n))
+    # now randomly generate porobabilities
+    for row in range(n*k):
+        # generate positive probability in first column
+        tpm[row][0] = rnd.random()
+        # generate positive probability in remaining select columns
+        for col in range(r):
+            # col_input = int(pos[row][col])
+            tpm[row][int(pos[row][col])] = rnd.random()
+        # divide entries by row sum to ensure probabilities sum to 1
+        row_sum = np.sum(tpm[row])
+        tpm[row] = tpm[row]/row_sum
+    return(tpm)
 
 
-def do_thing():
+def make_cost(n, k):
+    cost = np.zeros((n*k, 1))
+    for aa in range(n*k):
+        cost[aa] = rnd.random()
+    return(cost)
 
-    nlist = [1000]
 
-    N = len(nlist)
+def make_initial_distr(n, k):
+    distr = np.zeros((n, 1))
+    for aa in range(n):
+        distr[aa] = rnd.random()
+    return(distr)
 
-    dlist = []
-    opt_list = []
-    opt_val_list_list = []
 
-    for i in range(N):
-        n = nlist[i]
-        print("n = ")
-        print(n)
+def make_D(nn, k):
+    ii = np.identity(nn)
+    D = np.zeros((nn*k, nn))
+    count = -1
+    for i in range(nn):
+        for a in range(k):
+            count = count + 1
+            D[count] = ii[i]
+    return(D)
 
-        k = 10
-        r = 10
-        beta = 0.8
 
-        state_space, cost, tpm, distr, opt_dvs, opt_val = set_up(
-            n, k, r, beta, type="Reg")
+def make_A(nn, k, tpm, beta):
+    # count = -1
+    A = np.zeros((nn*k, nn))
+    # for i in range(n):
+    #    for a in range(k):
+    #        count = count +1
+    #        for j in range(n):
+    #            kron_delt = 0
+    #            if i == j:
+    #                kron_delt = 1
+    #            A[count][j] = kron_delt-beta*tpm[count][j]
+    D = make_D(nn, k)
+    A = D-beta*tpm
+    return(A)
 
-        d = 1
-        cluster = [0]
-        clusterC = clusterC_maker(cluster, state_space)
-        opt_value_list = []
 
-        diff = 1
-        while diff >= 0:
-            print("d = ")
-            print(d)
+def model_solver_primal(A, cost, distr):
+    # this can be used for original model or aggregated model
+    # will solve the primal.
+    # will basically just be using linprog().....
+    result = scipy.optimize.linprog(
+        c=-distr, A_ub=A, b_ub=cost, bounds=(None, None),
+        method="interior-point", callback=None,
+        options={"maxiter": 1000, "tol": 1e-08})
+    # method='simplex', callback=None,
+    # options={'c0': None, 'A': None, 'b': None, 'postsolve_args': None,
+    # 'maxiter': 1000, 'tol': 1e-09, 'disp': False, 'bland': False}, x0=None)
 
-            tpm_d, cost_d, distr_d, A_d = model_aggregator(
-                tpm, cluster, clusterC, cost, distr, n, k, d, beta)
+    return(result.x, -result.fun)
 
-            dvs_primal_d, val_d_primal = model_solver_primal(
-                A=A_d, cost=cost_d, distr=distr_d, N=d+1)
 
-            dvs_dual_d, val_d_dual = model_solver_dual(
-                A=A_d, cost=cost_d, distr=distr_d, N=d+1, k=k)
+def model_solver_dual(A, cost, distr):
+    # this can be used for original model or aggregated model
+    # will solve the primal.
+    # will basically just be using linprog().....
+    print("Start Solve")
 
-            opt_pol = make_opt_policy(dvs_dual_d, k, d)
+    result = scipy.optimize.linprog(
+        c=cost, A_eq=A.transpose(), b_eq=distr, bounds=(0, None),
+        method="interior-point", options={"maxiter": 1000, "tol": 1e-08})
+    print("End Solve")
 
-            pre_M = M_function(dvs_dual_d, dvs_primal_d, opt_pol, cluster,
-                               clusterC, cost, beta, n, d, k, tpm, distr)
+    return(result.x, result.fun)
 
-            opt_value_list.append(val_d_dual)
 
-            print(val_d_primal)
-            print(val_d_dual)
-            print(dvs_primal_d)
-            print(dvs_dual_d)
-            break
+def make_tpm_reg(n, k, r):
+    pos = make_pos(n, k, r)
+    tpm = make_tpm(n, k, r, pos)
+    return(tpm)
 
-            test = True
 
-            for item in pre_M:
-                test = test and item <= 0
+def set_up(n, k, r, beta, type):
+    # state space
+    state_space = [i for i in range(n)]
+    # make transition probability matrix with options
+    # tpm = tpm_maker_options(n,k,r,type)
+    # make reg tpm
+    tpm = make_tpm_reg(n, k, r)
 
-            if test:
-                diff = -1
-                print("EXIT: M is empty.")
-                dlist.append(d)
-                opt_val_list_list.append(opt_value_list)
-                break
+    # cost
+    cost = make_cost(n, k)
 
-            if d > 1:
-                diff = opt_value_list[-2]-opt_value_list[-1]
+    # initial distr
+    distr = make_initial_distr(n, k)
 
-            new_state = state_chooser(pre_M, clusterC)
+    # matrix A for linear program
+    A = make_A(n, k, tpm, beta)
 
-            if diff < 0.01:
-                print("EXIT: Difference is less than 0.")
-                dlist.append(d)
-                opt_val_list_list.append(opt_value_list)
-            cluster.append(new_state)
+    # solve original problem for opt value and decision variables.
+    opt_dvs, opt_val = model_solver_primal(A, cost, distr)
+    # opt_dvs, opt_val = model_solver_primal(A, cost, distr)
 
-            clusterC = clusterC_maker(cluster, state_space)
-
-            d += 1
-
-    print(opt_val_list_list)
-    print(dlist)
+    return(state_space, cost, tpm, distr, opt_dvs, opt_val)
 
 
 def main(args):
 
-    if True:
-        do_thing()
+    # do something
 
     return
 

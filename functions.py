@@ -225,7 +225,7 @@ def model_aggregator(tpm, cluster, clusterC, cost, distr, n, k, d, beta):
     cost_d = make_cost_d(tpm, cluster, clusterC, cost, distr, n, k, d)
     tpm_d = make_tpm_d(tpm, cluster, clusterC, cost, distr, n, k, d)
     A_d = make_A(nn=d+1, k=k, tpm=tpm_d, beta=beta)
-    return(tpm_d, cost_d, distr_d, A_d)
+    return(cost_d, distr_d, A_d)
 
 
 def make_cost_d(tpm, cluster, clusterC, cost, distr, n, k, d):

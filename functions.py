@@ -80,7 +80,7 @@ def make_A(nn, k, tpm, beta):
     A = D-beta*tpm
     return(A)
 
-
+'''
 def model_solver_primal_gurobi(A, cost, distr, N):
     # Create a new model
     # m = gp.Model("Primal")
@@ -140,6 +140,7 @@ def model_solver_dual_gurobi(A, cost, distr, N, k):
     dvs = x.X
     value = m.objVal
     return(dvs, value)
+'''
 
 
 def model_solver_primal(A, cost, distr):
@@ -160,13 +161,13 @@ def model_solver_primal(A, cost, distr):
 def model_solver_dual(A, cost, distr):
     # this can be used for original model or aggregated model
     # will solve the primal.
-    #will basically just be using linprog().....
-    print("Start Solve")
+    # will basically just be using linprog().....
+    # print("Start Solve")
 
     result = scipy.optimize.linprog(
         c=cost, A_eq=A.transpose(), b_eq=distr, bounds=(0, None),
         method="interior-point", options={"maxiter": 1000, "tol": 1e-08})
-    print("End Solve")
+    # print("End Solve")
 
     return(result.x, result.fun)
 
@@ -177,11 +178,11 @@ def model_solver_dual(A, cost, distr):
 
 
 def make_tpm_reg(n, k, r):
-    pos = make_pos(n,k,r)
+    pos = make_pos(n, k, r)
     tpm = make_tpm(n, k, r, pos)
     return(tpm)
 
-#def tpm_maker_options(n,k,r,type):
+# def tpm_maker_options(n,k,r,type):
 #    if type == "Fred":
 #        tpm = make_tpm_fred(n,k,r)
 #    elif type == "Reg":
@@ -189,7 +190,7 @@ def make_tpm_reg(n, k, r):
 #    return(tpm)
 
 
-def set_up(n,k,r,beta,type):
+def set_up(n, k, r, beta, type):
     # state space
     state_space = [i for i in range(n)]
     # make transition probability matrix with options
@@ -207,7 +208,7 @@ def set_up(n,k,r,beta,type):
     A = make_A(n, k, tpm, beta)
 
     # solve original problem for opt value and decision variables.
-    opt_dvs, opt_val = model_solver_primal_gurobi(A, cost, distr, N=n)
+    opt_dvs, opt_val = model_solver_primal(A, cost, distr)
     # opt_dvs, opt_val = model_solver_primal(A, cost, distr)
 
     return(state_space, cost, tpm, distr, opt_dvs, opt_val)
@@ -217,11 +218,12 @@ def clusterC_maker(cluster, state_space):
     clusterC = [item for item in state_space if item not in cluster]
     return(clusterC)
 
+
 # ##------------------Aggregated model functions
 def model_aggregator(tpm, cluster, clusterC, cost, distr, n, k, d, beta):
     distr_d = make_distr_d(tpm, cluster, clusterC, cost, distr, n, k)
-    cost_d = make_cost_d(tpm, cluster, clusterC, cost, distr, n, k,d)
-    tpm_d = make_tpm_d(tpm, cluster, clusterC, cost, distr, n, k,d)
+    cost_d = make_cost_d(tpm, cluster, clusterC, cost, distr, n, k, d)
+    tpm_d = make_tpm_d(tpm, cluster, clusterC, cost, distr, n, k, d)
     A_d = make_A(nn=d+1, k=k, tpm=tpm_d, beta=beta)
     return(tpm_d, cost_d, distr_d, A_d)
 
@@ -291,10 +293,11 @@ def make_tpm_d(tpm, cluster, clusterC, cost, distr, n, k, d):
 
     return(tpm_d)
 
+
 def make_opt_policy(dvs_dual_d, k, d):
     opt_pol = []
 
-    counter = -1
+    # counter = -1
 
     for dd in range(d+1):
 
@@ -307,12 +310,15 @@ def make_opt_policy(dvs_dual_d, k, d):
     return(opt_pol)
 
 
-def make_v_hat(dvs_dual_d, dvs_primal_d, opt_pol,cluster, clusterC,cost, beta, d, k, tpm):
+def make_v_hat(dvs_dual_d, dvs_primal_d, opt_pol, cluster, clusterC, cost,
+               beta, d, k, tpm):
     v_hat = []
     for kk in clusterC:
         c = cost[kk*k+opt_pol[-1]]
-        b1 = beta*sum([tpm[kk*k+opt_pol[-1], cluster[j]]*dvs_primal_d[j] for j in range(d)])
-        b2 = beta*sum([tpm[kk*k+opt_pol[-1], k_dash]*dvs_primal_d[-1] for k_dash in clusterC])
+        b1 = beta*sum([tpm[kk*k+opt_pol[-1], cluster[j]]*dvs_primal_d[
+            j] for j in range(d)])
+        b2 = beta*sum([tpm[kk*k+opt_pol[-1], k_dash]*dvs_primal_d[
+            -1] for k_dash in clusterC])
         v_kk = c+b1+b2-dvs_primal_d[-1]
         v_hat.append(v_kk)
     return(v_hat)
@@ -324,7 +330,8 @@ def make_y_hat(dvs_dual_d, dvs_primal_d, opt_pol, cluster, clusterC, cost,
     for kk in clusterC:
         b3 = sum([tpm[k_dash*k+opt_pol[-1], kk] for k_dash in clusterC])
         b1 = (1-beta*b3)*dvs_dual_d[d*k+opt_pol[-1]]
-        b2 = beta*sum([tpm[cluster[i]*k+opt_pol[i], kk]*dvs_dual_d[i*k+opt_pol[i]] for i in range(d)])
+        b2 = beta*sum([tpm[cluster[i]*k+opt_pol[i], kk]*dvs_dual_d[i*k+opt_pol[
+            i]] for i in range(d)])
         y_kk = b1-b2-distr[kk]
         y_hat.append(y_kk)
     return(y_hat)
@@ -341,9 +348,10 @@ def make_pre_M(v_hat, y_hat, n, d):
 
 def M_function(dvs_dual_d, dvs_primal_d, opt_pol, cluster, clusterC, cost,
                beta, n, d, k, tpm, distr):
-    v_hat = make_v_hat(
-        dvs_dual_d, dvs_primal_d, opt_pol,cluster, clusterC,cost, beta, d, k, tpm)
-    y_hat = make_y_hat(dvs_dual_d, dvs_primal_d, opt_pol,cluster, clusterC,cost, beta, d, k, tpm,distr)
+    v_hat = make_v_hat(dvs_dual_d, dvs_primal_d, opt_pol, cluster, clusterC,
+                       cost, beta, d, k, tpm)
+    y_hat = make_y_hat(dvs_dual_d, dvs_primal_d, opt_pol, cluster, clusterC,
+                       cost, beta, d, k, tpm, distr)
     pre_M = make_pre_M(v_hat, y_hat, n, d)
     return(pre_M)
 
@@ -352,6 +360,7 @@ def state_chooser(pre_M, clusterC):
     new_state_index = pre_M.argmax()
     new_state = clusterC[new_state_index]
     return(new_state)
+
 
 def model_augmentor(cluster, new_state):
     new_cluster = cluster
